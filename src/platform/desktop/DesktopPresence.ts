@@ -271,7 +271,9 @@ export class DesktopPresence {
 
   private load(): UiSettings {
     try {
-      const raw = JSON.parse(fs.readFileSync(this.settingsPath, "utf8")) as Partial<UiSettings>;
+      const raw = JSON.parse(fs.readFileSync(this.settingsPath, "utf8")) as Partial<UiSettings> & {
+        opacity?: number;
+      };
       const legacy = clamp(Number(raw.opacity) || 92, 15, 95);
       return {
         chrome: raw.chrome === "hud" ? "hud" : "window",
