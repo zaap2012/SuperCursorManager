@@ -1,0 +1,30 @@
+{
+  "name": "pulse",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/electron/main.js",
+  "icon": "assets/icon.png",
+  "scripts": {
+    "dev": "tsc -p tsconfig.node.json && concurrently -k \"tsc -p tsconfig.node.json --watch --preserveWatchOutput\" \"vite\" \"wait-on tcp:127.0.0.1:5173 && electron .\"",
+    "build": "tsc -p tsconfig.node.json && vite build",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "electron": "^43.3.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^6.0.5",
+    "concurrently": "^10.0.4",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.1",
+    "wait-on": "^9.1.0"
+  }
+}
