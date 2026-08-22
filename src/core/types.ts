@@ -129,7 +129,8 @@ export type ChromeMode = "window" | "hud";
 
 export type UiSettings = {
   chrome: ChromeMode;
-  opacity: number;
+  opacityWindow: number;
+  opacityHud: number;
   overlay: boolean;
 };
 

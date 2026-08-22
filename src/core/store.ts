@@ -12,7 +12,7 @@ import type {
   UiSettings,
 } from "./types.js";
 
-const defaultUi: UiSettings = { chrome: "window", opacity: 92, overlay: false };
+const defaultUi: UiSettings = { chrome: "window", opacityWindow: 90, opacityHud: 92, overlay: false };
 
 export class SessionStore extends EventEmitter {
   private readonly sessions = new Map<string, WorkSession>();

@@ -6,7 +6,7 @@ import path from "node:path";
 import { brand } from "../../brand.js";
 import type { ChromeMode, UiSettings } from "../../core/types.js";
 
-const OPACITY_STEPS = [15, 25, 35, 45, 55, 65, 75, 85, 95];
+const OPACITY_STEPS = [15, 25, 35, 45, 55, 65, 75, 85, 90, 95];
 const HUD_HEIGHT = 22;
 const HUD_HEIGHT_MAX = HUD_HEIGHT * 3;
 const HOVER_HOLD_MS = 2000;
@@ -114,8 +114,14 @@ export class DesktopPresence {
     return process.argv.includes("--hidden") || app.getLoginItemSettings().wasOpenedAsHidden;
   }
 
-  private setOpacity(percent: number): void {
-    this.patch({ opacity: clamp(percent, 15, 95) });
+  private setWindowOpacity(percent: number): void {
+    this.patch({ opacityWindow: clamp(percent, 15, 95) });
+    this.applyLook();
+    this.rebuildMenu();
+  }
+
+  private setHudOpacity(percent: number): void {
+    this.patch({ opacityHud: clamp(percent, 15, 95) });
     this.applyLook();
     this.rebuildMenu();
   }
@@ -166,7 +172,8 @@ export class DesktopPresence {
     const win = this.window;
     if (!win) return;
     const boost = this.hovering ? 30 : 0;
-    win.setOpacity(clamp(this.settings.opacity - boost, 15, 95) / 100);
+    const base = this.settings.chrome === "hud" ? this.settings.opacityHud : this.settings.opacityWindow;
+    win.setOpacity(clamp(base - boost, 15, 95) / 100);
     if (this.settings.overlay) win.setAlwaysOnTop(true, "screen-saver");
     else win.setAlwaysOnTop(false);
     const passClicks = this.settings.chrome === "hud" && !this.settings.overlay;
@@ -231,18 +238,25 @@ export class DesktopPresence {
 
   private rebuildMenu(): void {
     if (!this.tray) return;
-    const opacityMenu: MenuItemConstructorOptions[] = OPACITY_STEPS.map((value) => ({
+    const windowOpacity: MenuItemConstructorOptions[] = OPACITY_STEPS.map((value) => ({
       label: `${value}%`,
       type: "radio",
-      checked: this.settings.opacity === value,
-      click: () => this.setOpacity(value),
+      checked: this.settings.opacityWindow === value,
+      click: () => this.setWindowOpacity(value),
+    }));
+    const hudOpacity: MenuItemConstructorOptions[] = OPACITY_STEPS.map((value) => ({
+      label: `${value}%`,
+      type: "radio",
+      checked: this.settings.opacityHud === value,
+      click: () => this.setHudOpacity(value),
     }));
     this.tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: "Abrir janela", click: () => this.show() },
         { label: "Barra no topo", type: "checkbox", checked: this.settings.chrome === "hud", click: () => this.setChrome(this.settings.chrome === "hud" ? "window" : "hud") },
         { type: "separator" },
-        { label: "Transparência", submenu: opacityMenu },
+        { label: "Visibilidade da janela", submenu: windowOpacity },
+        { label: "Visibilidade da barra", submenu: hudOpacity },
         {
           label: "Sobrepor",
           type: "checkbox",
@@ -258,13 +272,15 @@ export class DesktopPresence {
   private load(): UiSettings {
     try {
       const raw = JSON.parse(fs.readFileSync(this.settingsPath, "utf8")) as Partial<UiSettings>;
+      const legacy = clamp(Number(raw.opacity) || 92, 15, 95);
       return {
         chrome: raw.chrome === "hud" ? "hud" : "window",
-        opacity: clamp(Number(raw.opacity) || 92, 15, 95),
+        opacityWindow: clamp(Number(raw.opacityWindow) || 90, 15, 95),
+        opacityHud: clamp(Number(raw.opacityHud) || legacy, 15, 95),
         overlay: Boolean(raw.overlay),
       };
     } catch {
-      return { chrome: "window", opacity: 92, overlay: false };
+      return { chrome: "window", opacityWindow: 90, opacityHud: 92, overlay: false };
     }
   }
 

@@ -71,7 +71,7 @@ export class LiveClient {
       const data = (await res.json()) as AppSnapshot;
       this.onSnapshot({
         ...data,
-        ui: data.ui ?? { chrome: "window", opacity: 92, overlay: false },
+        ui: data.ui ?? { chrome: "window", opacityWindow: 90, opacityHud: 92, overlay: false },
       });
     } catch {
       // server still booting
@@ -87,7 +87,7 @@ export class LiveClient {
         const data = JSON.parse(String(event.data)) as AppSnapshot;
         this.onSnapshot({
           ...data,
-          ui: data.ui ?? { chrome: "window", opacity: 92, overlay: false },
+          ui: data.ui ?? { chrome: "window", opacityWindow: 90, opacityHud: 92, overlay: false },
         });
       } catch {
         // ignore malformed frame

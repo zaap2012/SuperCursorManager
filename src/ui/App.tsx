@@ -15,7 +15,7 @@ const empty: AppSnapshot = {
   sessions: [],
   projects: [],
   integrations: [],
-  ui: { chrome: "window", opacity: 92, overlay: false },
+  ui: { chrome: "window", opacityWindow: 90, opacityHud: 92, overlay: false },
 };
 
 export function App() {
