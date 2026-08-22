@@ -34,6 +34,14 @@ body,
   min-height: calc(100vh - 16px);
 }
 
+.app:not(.chrome-hud) {
+  -webkit-app-region: drag;
+}
+
+.app:not(.chrome-hud) > * {
+  -webkit-app-region: no-drag;
+}
+
 .app.chrome-hud {
   padding: 0;
   max-width: none;
@@ -68,16 +76,16 @@ body,
 
 .hud-stats {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 7px;
   margin-left: auto;
   flex-shrink: 0;
-  max-width: 58%;
   color: color-mix(in srgb, var(--muted) 88%, var(--text));
   font-size: 10px;
   letter-spacing: 0.02em;
   white-space: nowrap;
+  overflow: hidden;
 }
 
 .hud-chip {

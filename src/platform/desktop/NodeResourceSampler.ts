@@ -31,12 +31,12 @@ type WmiIoNet = {
   Tx: number;
 };
 
+type HostPerf = WmiCpu & WmiIoNet;
+
 export class NodeHostResourceSampler extends HostResourceSampler {
   private previous = os.cpus().map(coreTimes);
-  private wmi: WmiCpu | null = null;
-  private wmiAt = 0;
-  private ioNet: WmiIoNet | null = null;
-  private ioNetAt = 0;
+  private perf: HostPerf | null = null;
+  private perfAt = 0;
 
   async sample(): Promise<Partial<ResourceSnapshot>> {
     const coresNow = os.cpus();
@@ -59,7 +59,7 @@ export class NodeHostResourceSampler extends HostResourceSampler {
     const memAvailable = os.freemem();
     const memUsedBytes = memTotalBytes - memAvailable;
     const spec = await this.cpuSpec(coresNow[0]);
-    const ioNet = await this.readIoNet();
+    const ioNet = this.ioFromPerf(this.perf);
 
     const cpu: HostCpuSnapshot = {
       usagePercent: round(usagePercent),
@@ -108,7 +108,7 @@ export class NodeHostResourceSampler extends HostResourceSampler {
     const baseMhz = fallback?.speed ?? 0;
     const model = fallback?.model.replace(/\s+/g, " ").trim() ?? "CPU";
     if (process.platform === "win32") {
-      const wmi = await this.readWmi();
+      const wmi = await this.readHostPerf();
       if (wmi) {
         const maxMhz = Number(wmi.MaxClockSpeed) || baseMhz;
         const perf = Number(wmi.PercentProcessorPerformance);
@@ -131,66 +131,34 @@ export class NodeHostResourceSampler extends HostResourceSampler {
     };
   }
 
-  private async readIoNet(): Promise<{
-    readBytesPerSec: number;
-    writeBytesPerSec: number;
-    recvBytesPerSec: number;
-    sentBytesPerSec: number;
-  }> {
-    if (this.ioNet && Date.now() - this.ioNetAt < 1800) {
-      return this.fromIoNet(this.ioNet);
-    }
-    if (process.platform !== "win32") {
-      return { readBytesPerSec: 0, writeBytesPerSec: 0, recvBytesPerSec: 0, sentBytesPerSec: 0 };
-    }
-    try {
-      const { stdout } = await execFileAsync(
-        "powershell.exe",
-        [
-          "-NoProfile",
-          "-Command",
-          "$d = Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk | Where-Object { $_.Name -eq '_Total' } | Select-Object -First 1; $n = Get-CimInstance Win32_PerfFormattedData_Tcpip_NetworkInterface | Where-Object { $_.Name -notmatch 'isatap|Teredo|Loopback|Pseudo' }; [pscustomobject]@{ Read=[int64]$d.DiskReadBytesPersec; Write=[int64]$d.DiskWriteBytesPersec; Rx=[int64]($n | Measure-Object BytesReceivedPersec -Sum).Sum; Tx=[int64]($n | Measure-Object BytesSentPersec -Sum).Sum } | ConvertTo-Json -Compress",
-        ],
-        { windowsHide: true, timeout: 3500 },
-      );
-      const parsed = JSON.parse(stdout) as WmiIoNet;
-      this.ioNet = parsed;
-      this.ioNetAt = Date.now();
-      return this.fromIoNet(parsed);
-    } catch {
-      return this.ioNet
-        ? this.fromIoNet(this.ioNet)
-        : { readBytesPerSec: 0, writeBytesPerSec: 0, recvBytesPerSec: 0, sentBytesPerSec: 0 };
-    }
-  }
-
-  private fromIoNet(raw: WmiIoNet) {
+  private ioFromPerf(raw: HostPerf | null) {
     return {
-      readBytesPerSec: Number(raw.Read) || 0,
-      writeBytesPerSec: Number(raw.Write) || 0,
-      recvBytesPerSec: Number(raw.Rx) || 0,
-      sentBytesPerSec: Number(raw.Tx) || 0,
+      readBytesPerSec: Number(raw?.Read) || 0,
+      writeBytesPerSec: Number(raw?.Write) || 0,
+      recvBytesPerSec: Number(raw?.Rx) || 0,
+      sentBytesPerSec: Number(raw?.Tx) || 0,
     };
   }
 
-  private async readWmi(): Promise<WmiCpu | null> {
-    if (this.wmi && Date.now() - this.wmiAt < 4000) return this.wmi;
+  private async readHostPerf(): Promise<HostPerf | null> {
+    if (this.perf && Date.now() - this.perfAt < 1800) return this.perf;
+    if (process.platform !== "win32") return this.perf;
     try {
       const { stdout } = await execFileAsync(
         "powershell.exe",
         [
           "-NoProfile",
           "-Command",
-          "$p = Get-CimInstance Win32_Processor | Select-Object -First 1 Name,Manufacturer,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed,CurrentClockSpeed; $perf = Get-CimInstance Win32_PerfFormattedData_Counters_ProcessorInformation | Where-Object { $_.Name -eq '_Total' } | Select-Object -First 1 -ExpandProperty PercentProcessorPerformance; [pscustomobject]@{ Name=$p.Name; Manufacturer=$p.Manufacturer; NumberOfCores=$p.NumberOfCores; NumberOfLogicalProcessors=$p.NumberOfLogicalProcessors; MaxClockSpeed=$p.MaxClockSpeed; CurrentClockSpeed=$p.CurrentClockSpeed; PercentProcessorPerformance=$perf } | ConvertTo-Json -Compress",
+          "$p = Get-CimInstance Win32_Processor | Select-Object -First 1 Name,Manufacturer,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed,CurrentClockSpeed; $perf = Get-CimInstance Win32_PerfFormattedData_Counters_ProcessorInformation | Where-Object { $_.Name -eq '_Total' } | Select-Object -First 1 -ExpandProperty PercentProcessorPerformance; $d = Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk | Where-Object { $_.Name -eq '_Total' } | Select-Object -First 1; $n = Get-CimInstance Win32_PerfFormattedData_Tcpip_NetworkInterface | Where-Object { $_.Name -notmatch 'isatap|Teredo|Loopback|Pseudo' }; [pscustomobject]@{ Name=$p.Name; Manufacturer=$p.Manufacturer; NumberOfCores=$p.NumberOfCores; NumberOfLogicalProcessors=$p.NumberOfLogicalProcessors; MaxClockSpeed=$p.MaxClockSpeed; CurrentClockSpeed=$p.CurrentClockSpeed; PercentProcessorPerformance=$perf; Read=[int64]$d.DiskReadBytesPersec; Write=[int64]$d.DiskWriteBytesPersec; Rx=[int64]($n | Measure-Object BytesReceivedPersec -Sum).Sum; Tx=[int64]($n | Measure-Object BytesSentPersec -Sum).Sum } | ConvertTo-Json -Compress",
         ],
-        { windowsHide: true, timeout: 3500 },
+        { windowsHide: true, timeout: 4000 },
       );
-      const parsed = JSON.parse(stdout) as WmiCpu | WmiCpu[];
-      this.wmi = Array.isArray(parsed) ? parsed[0] : parsed;
-      this.wmiAt = Date.now();
-      return this.wmi;
+      const parsed = JSON.parse(stdout) as HostPerf | HostPerf[];
+      this.perf = Array.isArray(parsed) ? parsed[0] : parsed;
+      this.perfAt = Date.now();
+      return this.perf;
     } catch {
-      return this.wmi;
+      return this.perf;
     }
   }
 }
@@ -209,7 +177,9 @@ export class NodeProcessGroupSampler extends ProcessGroupSampler {
 
   async sample(): Promise<ProcessGroupSnapshot | null> {
     const processes = await listProcesses();
-    const matched = processes.filter((proc) => this.match.test(proc.name));
+    const matched = processes.filter(
+      (proc) => this.match.test(proc.name) && !/^electron$/i.test(proc.name),
+    );
     const now = Date.now();
     const elapsed = Math.max((now - this.previousAt) / 1000, 0.2);
     const cores = Math.max(os.cpus().length, 1);

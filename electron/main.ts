@@ -116,22 +116,32 @@ function createWindow(): BrowserWindow {
 }
 
 app.on("second-instance", () => {
+  if (!gotLock) return;
   presence.show();
 });
 
 app.whenReady().then(() => {
+  if (!gotLock) return;
+  app.setName(brand.name);
   if (process.platform === "win32") app.setAppUserModelId("dev.pulse.manager");
   installer.install();
   server.start();
   presence.enableLogin();
   presence.startTray();
-  resourceTimer = setInterval(async () => {
+  let sampling = false;
+  const sample = async () => {
+    if (sampling) return;
+    sampling = true;
     try {
       store.setResources(await resources.sample());
     } catch {
       // keep last sample
+    } finally {
+      sampling = false;
     }
-  }, 2000);
+  };
+  void sample();
+  resourceTimer = setInterval(() => void sample(), 2000);
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

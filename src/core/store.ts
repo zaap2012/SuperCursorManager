@@ -75,6 +75,7 @@ export class SessionStore extends EventEmitter {
       }
       session.apply(event);
     }
+    this.prune();
     this.emitChange();
   }
 
@@ -83,16 +84,28 @@ export class SessionStore extends EventEmitter {
     const sessions = [...this.sessions.values()]
       .map((session) => session.toSnapshot(this.eta, now))
       .sort((a, b) => b.updatedAt - a.updatedAt);
+    const live = sessions.filter((s) => s.status === "active" || s.status === "waiting");
+    const done = sessions.filter((s) => s.status !== "active" && s.status !== "waiting").slice(0, 24);
 
     return {
       brand: { name: brand.name, tagline: brand.tagline },
       ingest: { port: brand.ingestPort, listening: this.listening },
       resources: this.resources,
-      sessions,
+      sessions: [...live, ...done],
       projects: [...this.projects.values()],
       integrations: this.integrations,
       ui: this.ui,
     };
+  }
+
+  private prune(): void {
+    const done = [...this.sessions.entries()]
+      .filter(([, session]) => session.status !== "active" && session.status !== "waiting")
+      .sort((a, b) => a[1].updatedAt - b[1].updatedAt);
+    while (done.length > 40) {
+      const extra = done.shift();
+      if (extra) this.sessions.delete(extra[0]);
+    }
   }
 
   private emitChange(): void {

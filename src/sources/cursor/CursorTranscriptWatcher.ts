@@ -140,13 +140,19 @@ function emitChunk(
   }
 }
 
+let transcriptListAt = 0;
+let transcriptList: string[] = [];
+
 function listTranscripts(root: string): string[] {
+  if (Date.now() - transcriptListAt < 2500 && transcriptList.length) return transcriptList;
   const out: string[] = [];
   for (const project of safeDir(root)) {
     const transcripts = path.join(root, project, "agent-transcripts");
     if (!fs.existsSync(transcripts)) continue;
     walkJsonl(transcripts, out);
   }
+  transcriptList = out;
+  transcriptListAt = Date.now();
   return out;
 }
 

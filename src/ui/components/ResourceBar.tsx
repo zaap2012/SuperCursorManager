@@ -25,16 +25,19 @@ export function ResourceBar({
           label="Cursor"
           value={cursor ? `${cursor.cpuPercent.toFixed(digits)}%` : "—"}
           hint={cursor ? `${formatBytes(cursor.memBytes)} · ${cursor.processCount} proc` : "não detectado"}
+          bar={cursor?.cpuPercent}
         />
         <Metric
           label="RAM (total)"
           value={`${memory.usedPercent.toFixed(digits)}%`}
           hint={`${formatBytes(memory.usedBytes)} / ${formatBytes(memory.totalBytes)}`}
+          bar={memory.usedPercent}
         />
         <Metric
           label="CPU (total)"
           value={`${cpu.usagePercent.toFixed(digits)}%`}
           hint={`${formatMhz(cpu.currentMhz)} · ${cpu.activeCores}/${cpu.logicalCores} núcleos`}
+          bar={cpu.usagePercent}
         />
         <Metric
           label="Leitura (total)"
@@ -170,11 +173,26 @@ export function ResourceBar({
   );
 }
 
-function Metric({ label, value, hint }: { label: string; value: string; hint: string }) {
+function Metric({
+  label,
+  value,
+  hint,
+  bar,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  bar?: number;
+}) {
   return (
     <div className="metric">
       <span>{label}</span>
       <strong>{value}</strong>
+      {bar != null ? (
+        <div className="usage-track" title={`${Math.round(bar)}%`}>
+          <div className="usage-fill" style={{ width: `${Math.min(100, Math.max(0, bar))}%` }} />
+        </div>
+      ) : null}
       <small>{hint}</small>
     </div>
   );

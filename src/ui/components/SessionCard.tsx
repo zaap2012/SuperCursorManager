@@ -42,7 +42,13 @@ export function SessionCard({
       <dl className={`meta ${analytic ? "wide" : ""}`}>
         <div>
           <dt>ETA</dt>
-          <dd>{session.eta?.label ?? "—"}</dd>
+          <dd>
+            {session.status === "active" || session.status === "waiting"
+              ? session.eta?.label && !/conclu/i.test(session.eta.label)
+                ? session.eta.label
+                : "—"
+              : "—"}
+          </dd>
         </div>
         <div>
           <dt>Tempo</dt>

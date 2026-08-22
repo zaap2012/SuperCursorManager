@@ -8,27 +8,31 @@ export function HudStrip({
   now,
   resources,
   onHeight,
+  onOpen,
 }: {
   sessions: SessionSnapshot[];
   now: number;
   resources: ResourceSnapshot | null;
   onHeight?: (height: number) => void;
+  onOpen?: () => void;
 }) {
   const ref = useRef<HTMLElement>(null);
+  const heightFn = useRef(onHeight);
+  heightFn.current = onHeight;
   const items = uniqueByProject(sessions.filter((s) => s.status === "active" || s.status === "waiting"));
 
   useEffect(() => {
     const el = ref.current;
-    if (!el || !onHeight) return;
-    const report = () => onHeight(el.scrollHeight);
+    if (!el) return;
+    const report = () => heightFn.current?.(el.scrollHeight);
     report();
     const observer = new ResizeObserver(report);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [items.length, onHeight]);
+  }, [items.length]);
 
   return (
-    <section ref={ref} className="hud-strip">
+    <section ref={ref} className="hud-strip" onDoubleClick={() => onOpen?.()} title="Duplo clique abre a janela">
       <div className="hud-live">
         {!items.length ? (
           <span className="muted">Nenhum agente ativo</span>

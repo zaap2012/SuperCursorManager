@@ -20,6 +20,32 @@ export function formatBytesPerSec(bytesPerSec: number): string {
   return `${formatBytes(Math.max(0, bytesPerSec))}/s`;
 }
 
+export function formatCompactRate(bytesPerSec: number): string {
+  const n = Math.max(0, bytesPerSec);
+  if (n < 512) return "0";
+  if (n < 1024) return `${Math.round(n)}B`;
+  const units = ["K", "M", "G"];
+  let value = n / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(value >= 10 ? 0 : 1)}${units[unit]}/s`;
+}
+
+export function formatCompactBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`;
+  const units = ["K", "M", "G", "T"];
+  let value = bytes / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(value >= 10 ? 0 : 1)}${units[unit]}`;
+}
+
 export function formatElapsed(from: number, now = Date.now()): string {
   const seconds = Math.max(0, Math.round((now - from) / 1000));
   if (seconds < 60) return `${seconds}s`;

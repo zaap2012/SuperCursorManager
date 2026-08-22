@@ -70,7 +70,7 @@ export abstract class WorkSession {
       if (!running && silence > 6 * 60_000) {
         this.status = "completed";
         if (/^(conclu[ií]do|finalizado)?$/i.test(this.headline.trim()) || this.headline === "Concluído") {
-          const lastFile = this.files.sort((a, b) => b.lastAt - a.lastAt)[0];
+          const lastFile = [...this.files].sort((a, b) => b.lastAt - a.lastAt)[0];
           this.headline = lastFile ? `Editou ${lastFile.name}` : "Concluído";
         }
         this.agents = this.agents.map((agent) => ({ ...agent, status: "completed" }));
@@ -183,7 +183,10 @@ export class AgentWorkSession extends WorkSession {
         detail: event.detail,
       };
       if (existing) Object.assign(existing, record);
-      else this.tools.push(record);
+      else {
+        this.tools.push(record);
+        if (this.tools.length > 80) this.tools = this.tools.slice(-80);
+      }
       this.headline = event.detail
         ? `${event.toolName}: ${truncate(event.detail, 72)}`
         : `Usando ${event.toolName}`;

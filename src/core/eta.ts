@@ -8,7 +8,7 @@ export abstract class EtaStrategy {
 export class HeuristicEtaStrategy extends EtaStrategy {
   estimate(session: WorkSession, now = Date.now()): EtaEstimate | null {
     if (session.status === "completed" || session.status === "aborted") {
-      return { remainingMs: 0, confidence: 0.95, label: "concluído" };
+      return null;
     }
     if (session.status === "error") {
       return { remainingMs: 0, confidence: 0.7, label: "interrompeu" };

@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Menu, nativeImage, screen, Tray, type MenuItemConstructorOptions } from "electron";
+import { execFile } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -76,20 +77,37 @@ export class DesktopPresence {
   }
 
   enableLogin(): void {
+    app.setName(brand.name);
     if (process.platform !== "win32") {
       app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
       return;
     }
     if (app.isPackaged) {
       app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true, args: ["--hidden"] });
-      return;
+    } else {
+      app.setLoginItemSettings({
+        openAtLogin: true,
+        openAsHidden: true,
+        path: process.execPath,
+        args: [this.projectRoot, "--hidden"],
+      });
     }
-    app.setLoginItemSettings({
-      openAtLogin: true,
-      openAsHidden: true,
-      path: process.execPath,
-      args: [this.projectRoot, "--hidden"],
-    });
+    this.pruneDuplicateRunKeys();
+  }
+
+  private pruneDuplicateRunKeys(): void {
+    if (process.platform !== "win32") return;
+    const keep = new Set([brand.name, "dev.pulse.manager", app.getName()]);
+    const extras = ["electron.app.Electron", "Electron"];
+    for (const name of extras) {
+      if (keep.has(name)) continue;
+      execFile(
+        "reg",
+        ["delete", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", name, "/f"],
+        { windowsHide: true },
+        () => undefined,
+      );
+    }
   }
 
   startedHidden(): boolean {

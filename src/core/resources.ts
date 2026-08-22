@@ -42,8 +42,7 @@ export class CompositeResourceSampler {
       groups: {},
     };
 
-    for (const sampler of this.samplers) {
-      const piece = await sampler.sample();
+    for (const piece of await Promise.all(this.samplers.map((sampler) => sampler.sample()))) {
       if (!piece) continue;
       if ("host" in piece && piece.host) snapshot.host = piece.host;
       if ("groups" in piece && piece.groups) Object.assign(snapshot.groups, piece.groups);

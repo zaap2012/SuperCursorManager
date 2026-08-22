@@ -58,6 +58,7 @@ export function App() {
           now={now}
           resources={snap.resources}
           onHeight={(h) => void client.setHudHeight(h)}
+          onOpen={() => void client.windowAction("open")}
         />
       ) : (
         <>

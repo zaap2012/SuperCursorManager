@@ -33,6 +33,7 @@ export class LocalIngestServer {
       minimize(): void;
       toggleMaximize(): void;
       dock(): void;
+      show(): void;
       setHover(hovering: boolean): void;
       setHudHeight(height: number): void;
     },
@@ -61,6 +62,7 @@ export class LocalIngestServer {
       this.store.setListening(true);
       this.refreshIntegrations();
     });
+    this.server.on("error", () => this.store.setListening(false));
 
     this.spool = new FileSpoolTransport(spoolPath(), (envelope) => this.accept(envelope));
     this.spool.start();
@@ -149,6 +151,10 @@ export class LocalIngestServer {
       }
       if (req.method === "POST" && url === "/v1/window/close") {
         this.chrome?.dock();
+        return json(res, 200, { ok: true });
+      }
+      if (req.method === "POST" && url === "/v1/window/open") {
+        this.chrome?.show();
         return json(res, 200, { ok: true });
       }
       if (req.method === "POST" && url === "/v1/window/hud-height") {
