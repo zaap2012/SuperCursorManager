@@ -37,6 +37,7 @@ export class NodeHostResourceSampler extends HostResourceSampler {
   private previous = os.cpus().map(coreTimes);
   private perf: HostPerf | null = null;
   private perfAt = 0;
+  private perfBusy = false;
 
   async sample(): Promise<Partial<ResourceSnapshot>> {
     const coresNow = os.cpus();
@@ -58,7 +59,8 @@ export class NodeHostResourceSampler extends HostResourceSampler {
     const memTotalBytes = os.totalmem();
     const memAvailable = os.freemem();
     const memUsedBytes = memTotalBytes - memAvailable;
-    const spec = await this.cpuSpec(coresNow[0]);
+    const spec = this.cachedSpec(coresNow[0]);
+    this.kickPerf();
     const ioNet = this.ioFromPerf(this.perf);
 
     const cpu: HostCpuSnapshot = {
@@ -98,30 +100,28 @@ export class NodeHostResourceSampler extends HostResourceSampler {
     };
   }
 
-  private async cpuSpec(fallback?: os.CpuInfo): Promise<{
+  private cachedSpec(fallback?: os.CpuInfo): {
     model: string;
     vendor?: string;
     currentMhz: number;
     maxMhz: number;
     physicalCores: number;
-  }> {
+  } {
     const baseMhz = fallback?.speed ?? 0;
     const model = fallback?.model.replace(/\s+/g, " ").trim() ?? "CPU";
-    if (process.platform === "win32") {
-      const wmi = await this.readHostPerf();
-      if (wmi) {
-        const maxMhz = Number(wmi.MaxClockSpeed) || baseMhz;
-        const perf = Number(wmi.PercentProcessorPerformance);
-        const currentMhz =
-          perf > 0 ? Math.round((maxMhz * perf) / 100) : Number(wmi.CurrentClockSpeed) || maxMhz;
-        return {
-          model: String(wmi.Name ?? model).replace(/\s+/g, " ").trim(),
-          vendor: wmi.Manufacturer,
-          currentMhz,
-          maxMhz,
-          physicalCores: Number(wmi.NumberOfCores) || Math.max(1, Math.round((fallback ? os.cpus().length : 1) / 2)),
-        };
-      }
+    const wmi = this.perf;
+    if (wmi) {
+      const maxMhz = Number(wmi.MaxClockSpeed) || baseMhz;
+      const perf = Number(wmi.PercentProcessorPerformance);
+      const currentMhz =
+        perf > 0 ? Math.round((maxMhz * perf) / 100) : Number(wmi.CurrentClockSpeed) || maxMhz;
+      return {
+        model: String(wmi.Name ?? model).replace(/\s+/g, " ").trim(),
+        vendor: wmi.Manufacturer,
+        currentMhz,
+        maxMhz,
+        physicalCores: Number(wmi.NumberOfCores) || Math.max(1, Math.round((fallback ? os.cpus().length : 1) / 2)),
+      };
     }
     return {
       model,
@@ -129,6 +129,14 @@ export class NodeHostResourceSampler extends HostResourceSampler {
       maxMhz: baseMhz,
       physicalCores: os.cpus().length,
     };
+  }
+
+  private kickPerf(): void {
+    if (this.perfBusy) return;
+    this.perfBusy = true;
+    void this.readHostPerf().finally(() => {
+      this.perfBusy = false;
+    });
   }
 
   private ioFromPerf(raw: HostPerf | null) {
@@ -141,7 +149,7 @@ export class NodeHostResourceSampler extends HostResourceSampler {
   }
 
   private async readHostPerf(): Promise<HostPerf | null> {
-    if (this.perf && Date.now() - this.perfAt < 1800) return this.perf;
+    if (this.perf && Date.now() - this.perfAt < 280) return this.perf;
     if (process.platform !== "win32") return this.perf;
     try {
       const { stdout } = await execFileAsync(
@@ -166,6 +174,8 @@ export class NodeHostResourceSampler extends HostResourceSampler {
 export class NodeProcessGroupSampler extends ProcessGroupSampler {
   private previous = new Map<string, number>();
   private previousAt = Date.now();
+  private last: ProcessGroupSnapshot | null = null;
+  private busy = false;
 
   constructor(
     readonly id: string,
@@ -176,10 +186,20 @@ export class NodeProcessGroupSampler extends ProcessGroupSampler {
   }
 
   async sample(): Promise<ProcessGroupSnapshot | null> {
-    const processes = await listProcesses();
-    const matched = processes.filter(
-      (proc) => this.match.test(proc.name) && !/^electron$/i.test(proc.name),
-    );
+    if (!this.busy) {
+      this.busy = true;
+      void this.refresh()
+        .catch(() => undefined)
+        .finally(() => {
+          this.busy = false;
+        });
+    }
+    return this.last;
+  }
+
+  private async refresh(): Promise<void> {
+    const processes = await listCursorProcesses();
+    const matched = processes.filter((proc) => this.match.test(proc.name) && !/^electron$/i.test(proc.name));
     const now = Date.now();
     const elapsed = Math.max((now - this.previousAt) / 1000, 0.2);
     const cores = Math.max(os.cpus().length, 1);
@@ -197,11 +217,10 @@ export class NodeProcessGroupSampler extends ProcessGroupSampler {
 
     this.previous = new Map(matched.map((proc) => [proc.pid, proc.cpuSeconds]));
     this.previousAt = now;
-
-    return {
+    this.last = {
       id: this.id,
       label: this.label,
-      cpuPercent: round(cpuPercent),
+      cpuPercent: round(Math.min(100, cpuPercent)),
       memBytes,
       processCount: matched.length,
     };
@@ -213,22 +232,22 @@ function coreTimes(cpu: os.CpuInfo): CpuTimes {
   return { idle: cpu.times.idle, total };
 }
 
-async function listProcesses(): Promise<PidCpu[]> {
+async function listCursorProcesses(): Promise<PidCpu[]> {
   if (process.platform === "win32") {
     const { stdout } = await execFileAsync(
       "powershell.exe",
       [
         "-NoProfile",
         "-Command",
-        "Get-Process | Select-Object Id,ProcessName,WorkingSet64,CPU | ConvertTo-Csv -NoTypeInformation",
+        "Get-Process -Name 'Cursor*' -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,WorkingSet64,CPU | ConvertTo-Csv -NoTypeInformation",
       ],
-      { windowsHide: true, timeout: 4000 },
+      { windowsHide: true, timeout: 2500 },
     );
     return parseCsv(stdout);
   }
 
   const { stdout } = await execFileAsync("ps", ["-A", "-o", "pid=,comm=,rss=,time="], {
-    timeout: 4000,
+    timeout: 2500,
   });
   return stdout
     .trim()
@@ -240,7 +259,8 @@ async function listProcesses(): Promise<PidCpu[]> {
       name,
       memBytes: Number(rss) * 1024,
       cpuSeconds: parseUnixTime(time),
-    }));
+    }))
+    .filter((proc) => /cursor/i.test(proc.name));
 }
 
 function parseCsv(stdout: string): PidCpu[] {

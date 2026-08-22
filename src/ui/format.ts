@@ -16,6 +16,12 @@ export function formatBytes(bytes: number): string {
   return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`;
 }
 
+export function formatKbPerSec(bytesPerSec: number): string {
+  const kb = Math.max(0, bytesPerSec) / 1024;
+  if (kb < 10) return `${kb.toFixed(1)}KB/s`;
+  return `${Math.round(kb)}KB/s`;
+}
+
 export function formatBytesPerSec(bytesPerSec: number): string {
   return `${formatBytes(Math.max(0, bytesPerSec))}/s`;
 }

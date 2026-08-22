@@ -141,7 +141,7 @@ app.whenReady().then(() => {
     }
   };
   void sample();
-  resourceTimer = setInterval(() => void sample(), 2000);
+  resourceTimer = setInterval(() => void sample(), 333);
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

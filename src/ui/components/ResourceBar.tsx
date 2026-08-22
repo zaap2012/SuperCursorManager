@@ -1,5 +1,5 @@
 import type { ResourceSnapshot } from "../../core/types";
-import { formatBytes, formatBytesPerSec, formatMhz } from "../format";
+import { formatBytes, formatKbPerSec, formatMhz } from "../format";
 import type { ViewMode } from "../viewMode";
 
 export function ResourceBar({
@@ -41,18 +41,18 @@ export function ResourceBar({
         />
         <Metric
           label="Leitura (total)"
-          value={formatBytesPerSec(io?.readBytesPerSec ?? 0)}
-          hint="disco · bytes/s"
+          value={formatKbPerSec(io?.readBytesPerSec ?? 0)}
+          hint="disco · KB/s"
         />
         <Metric
           label="Gravação (total)"
-          value={formatBytesPerSec(io?.writeBytesPerSec ?? 0)}
-          hint="disco · bytes/s"
+          value={formatKbPerSec(io?.writeBytesPerSec ?? 0)}
+          hint="disco · KB/s"
         />
         <Metric
           label="Internet (total)"
-          value={formatBytesPerSec(net?.totalBytesPerSec ?? 0)}
-          hint={`${formatBytesPerSec(net?.recvBytesPerSec ?? 0)} ↓ · ${formatBytesPerSec(net?.sentBytesPerSec ?? 0)} ↑`}
+          value={`${formatKbPerSec(net?.recvBytesPerSec ?? 0)} / ${formatKbPerSec(net?.sentBytesPerSec ?? 0)}`}
+          hint="D · U"
         />
       </div>
 
@@ -132,19 +132,19 @@ export function ResourceBar({
             <dl>
               <div>
                 <dt>Leitura</dt>
-                <dd>{formatBytesPerSec(io?.readBytesPerSec ?? 0)}</dd>
+                <dd>{formatKbPerSec(io?.readBytesPerSec ?? 0)}</dd>
               </div>
               <div>
                 <dt>Gravação</dt>
-                <dd>{formatBytesPerSec(io?.writeBytesPerSec ?? 0)}</dd>
+                <dd>{formatKbPerSec(io?.writeBytesPerSec ?? 0)}</dd>
               </div>
               <div>
                 <dt>Download</dt>
-                <dd>{formatBytesPerSec(net?.recvBytesPerSec ?? 0)}</dd>
+                <dd>{formatKbPerSec(net?.recvBytesPerSec ?? 0)}</dd>
               </div>
               <div>
                 <dt>Upload</dt>
-                <dd>{formatBytesPerSec(net?.sentBytesPerSec ?? 0)}</dd>
+                <dd>{formatKbPerSec(net?.sentBytesPerSec ?? 0)}</dd>
               </div>
             </dl>
             {cursor ? (
