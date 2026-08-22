@@ -33,6 +33,8 @@ export class LocalIngestServer {
       minimize(): void;
       toggleMaximize(): void;
       dock(): void;
+      setHover(hovering: boolean): void;
+      setHudHeight(height: number): void;
     },
   ) {}
 
@@ -147,6 +149,18 @@ export class LocalIngestServer {
       }
       if (req.method === "POST" && url === "/v1/window/close") {
         this.chrome?.dock();
+        return json(res, 200, { ok: true });
+      }
+      if (req.method === "POST" && url === "/v1/window/hud-height") {
+        const body = await readBody(req);
+        const parsed = JSON.parse(body || "{}") as { height?: number };
+        this.chrome?.setHudHeight(Number(parsed.height) || 0);
+        return json(res, 200, { ok: true });
+      }
+      if (req.method === "POST" && url === "/v1/window/hover") {
+        const body = await readBody(req);
+        const parsed = JSON.parse(body || "{}") as { hovering?: boolean };
+        this.chrome?.setHover(Boolean(parsed.hovering));
         return json(res, 200, { ok: true });
       }
       json(res, 404, { error: "not_found" });

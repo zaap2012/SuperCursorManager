@@ -1,5 +1,5 @@
 import type { ResourceSnapshot } from "../../core/types";
-import { formatBytes, formatMhz } from "../format";
+import { formatBytes, formatBytesPerSec, formatMhz } from "../format";
 import type { ViewMode } from "../viewMode";
 
 export function ResourceBar({
@@ -13,30 +13,44 @@ export function ResourceBar({
     return <section className="resource-panel muted">Medindo recursos do PC…</section>;
   }
 
-  const { cpu, memory } = resources.host;
+  const { cpu, memory, io, net } = resources.host;
   const cursor = resources.groups["ide.cursor"];
   const analytic = view === "analytic";
+  const digits = analytic ? 1 : 0;
 
   return (
     <section className={`resource-panel ${view}`}>
       <div className="resource-summary">
         <Metric
-          label="CPU"
-          value={`${cpu.usagePercent.toFixed(analytic ? 1 : 0)}%`}
+          label="Cursor"
+          value={cursor ? `${cursor.cpuPercent.toFixed(digits)}%` : "—"}
+          hint={cursor ? `${formatBytes(cursor.memBytes)} · ${cursor.processCount} proc` : "não detectado"}
+        />
+        <Metric
+          label="RAM (total)"
+          value={`${memory.usedPercent.toFixed(digits)}%`}
+          hint={`${formatBytes(memory.usedBytes)} / ${formatBytes(memory.totalBytes)}`}
+        />
+        <Metric
+          label="CPU (total)"
+          value={`${cpu.usagePercent.toFixed(digits)}%`}
           hint={`${formatMhz(cpu.currentMhz)} · ${cpu.activeCores}/${cpu.logicalCores} núcleos`}
         />
         <Metric
-          label="RAM"
-          value={`${memory.usedPercent.toFixed(analytic ? 1 : 0)}%`}
-          hint={`${formatBytes(memory.usedBytes)} / ${formatBytes(memory.totalBytes)}`}
+          label="Leitura (total)"
+          value={formatBytesPerSec(io?.readBytesPerSec ?? 0)}
+          hint="disco · bytes/s"
         />
-        {cursor ? (
-          <Metric
-            label={cursor.label}
-            value={`${cursor.cpuPercent.toFixed(analytic ? 1 : 0)}%`}
-            hint={`${formatBytes(cursor.memBytes)} · ${cursor.processCount} proc`}
-          />
-        ) : null}
+        <Metric
+          label="Gravação (total)"
+          value={formatBytesPerSec(io?.writeBytesPerSec ?? 0)}
+          hint="disco · bytes/s"
+        />
+        <Metric
+          label="Internet (total)"
+          value={formatBytesPerSec(net?.totalBytesPerSec ?? 0)}
+          hint={`${formatBytesPerSec(net?.recvBytesPerSec ?? 0)} ↓ · ${formatBytesPerSec(net?.sentBytesPerSec ?? 0)} ↑`}
+        />
       </div>
 
       {analytic ? (
@@ -90,6 +104,9 @@ export function ResourceBar({
           </article>
           <article>
             <h3>Memória</h3>
+            <div className="usage-track" title={`${memory.usedPercent.toFixed(1)}%`}>
+              <div className="usage-fill" style={{ width: `${Math.min(100, memory.usedPercent)}%` }} />
+            </div>
             <dl>
               <div>
                 <dt>Usada</dt>
@@ -106,6 +123,25 @@ export function ResourceBar({
               <div>
                 <dt>Pressão</dt>
                 <dd>{memory.usedPercent.toFixed(1)}%</dd>
+              </div>
+            </dl>
+            <h3>Disco e rede</h3>
+            <dl>
+              <div>
+                <dt>Leitura</dt>
+                <dd>{formatBytesPerSec(io?.readBytesPerSec ?? 0)}</dd>
+              </div>
+              <div>
+                <dt>Gravação</dt>
+                <dd>{formatBytesPerSec(io?.writeBytesPerSec ?? 0)}</dd>
+              </div>
+              <div>
+                <dt>Download</dt>
+                <dd>{formatBytesPerSec(net?.recvBytesPerSec ?? 0)}</dd>
+              </div>
+              <div>
+                <dt>Upload</dt>
+                <dd>{formatBytesPerSec(net?.sentBytesPerSec ?? 0)}</dd>
               </div>
             </dl>
             {cursor ? (

@@ -24,10 +24,19 @@ type WmiCpu = {
   PercentProcessorPerformance?: number;
 };
 
+type WmiIoNet = {
+  Read: number;
+  Write: number;
+  Rx: number;
+  Tx: number;
+};
+
 export class NodeHostResourceSampler extends HostResourceSampler {
   private previous = os.cpus().map(coreTimes);
   private wmi: WmiCpu | null = null;
   private wmiAt = 0;
+  private ioNet: WmiIoNet | null = null;
+  private ioNetAt = 0;
 
   async sample(): Promise<Partial<ResourceSnapshot>> {
     const coresNow = os.cpus();
@@ -50,6 +59,7 @@ export class NodeHostResourceSampler extends HostResourceSampler {
     const memAvailable = os.freemem();
     const memUsedBytes = memTotalBytes - memAvailable;
     const spec = await this.cpuSpec(coresNow[0]);
+    const ioNet = await this.readIoNet();
 
     const cpu: HostCpuSnapshot = {
       usagePercent: round(usagePercent),
@@ -74,6 +84,15 @@ export class NodeHostResourceSampler extends HostResourceSampler {
           totalBytes: memTotalBytes,
           availableBytes: memAvailable,
           usedPercent: round((memUsedBytes / memTotalBytes) * 100),
+        },
+        io: {
+          readBytesPerSec: ioNet.readBytesPerSec,
+          writeBytesPerSec: ioNet.writeBytesPerSec,
+        },
+        net: {
+          recvBytesPerSec: ioNet.recvBytesPerSec,
+          sentBytesPerSec: ioNet.sentBytesPerSec,
+          totalBytesPerSec: ioNet.recvBytesPerSec + ioNet.sentBytesPerSec,
         },
       },
     };
@@ -109,6 +128,48 @@ export class NodeHostResourceSampler extends HostResourceSampler {
       currentMhz: baseMhz,
       maxMhz: baseMhz,
       physicalCores: os.cpus().length,
+    };
+  }
+
+  private async readIoNet(): Promise<{
+    readBytesPerSec: number;
+    writeBytesPerSec: number;
+    recvBytesPerSec: number;
+    sentBytesPerSec: number;
+  }> {
+    if (this.ioNet && Date.now() - this.ioNetAt < 1800) {
+      return this.fromIoNet(this.ioNet);
+    }
+    if (process.platform !== "win32") {
+      return { readBytesPerSec: 0, writeBytesPerSec: 0, recvBytesPerSec: 0, sentBytesPerSec: 0 };
+    }
+    try {
+      const { stdout } = await execFileAsync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-Command",
+          "$d = Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk | Where-Object { $_.Name -eq '_Total' } | Select-Object -First 1; $n = Get-CimInstance Win32_PerfFormattedData_Tcpip_NetworkInterface | Where-Object { $_.Name -notmatch 'isatap|Teredo|Loopback|Pseudo' }; [pscustomobject]@{ Read=[int64]$d.DiskReadBytesPersec; Write=[int64]$d.DiskWriteBytesPersec; Rx=[int64]($n | Measure-Object BytesReceivedPersec -Sum).Sum; Tx=[int64]($n | Measure-Object BytesSentPersec -Sum).Sum } | ConvertTo-Json -Compress",
+        ],
+        { windowsHide: true, timeout: 3500 },
+      );
+      const parsed = JSON.parse(stdout) as WmiIoNet;
+      this.ioNet = parsed;
+      this.ioNetAt = Date.now();
+      return this.fromIoNet(parsed);
+    } catch {
+      return this.ioNet
+        ? this.fromIoNet(this.ioNet)
+        : { readBytesPerSec: 0, writeBytesPerSec: 0, recvBytesPerSec: 0, sentBytesPerSec: 0 };
+    }
+  }
+
+  private fromIoNet(raw: WmiIoNet) {
+    return {
+      readBytesPerSec: Number(raw.Read) || 0,
+      writeBytesPerSec: Number(raw.Write) || 0,
+      recvBytesPerSec: Number(raw.Rx) || 0,
+      sentBytesPerSec: Number(raw.Tx) || 0,
     };
   }
 

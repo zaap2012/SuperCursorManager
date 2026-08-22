@@ -6,15 +6,20 @@ import { brand } from "../../brand.js";
 import type { ChromeMode, UiSettings } from "../../core/types.js";
 
 const OPACITY_STEPS = [15, 25, 35, 45, 55, 65, 75, 85, 95];
-const HUD_HEIGHT = 36;
+const HUD_HEIGHT = 22;
+const HUD_HEIGHT_MAX = HUD_HEIGHT * 3;
+const HOVER_HOLD_MS = 2000;
 
 type Bounds = { x: number; y: number; width: number; height: number };
 
 export class DesktopPresence {
   private tray: Tray | undefined;
   private quitting = false;
+  private hovering = false;
+  private hoverLeaveTimer: NodeJS.Timeout | undefined;
   private window: BrowserWindow | undefined;
   private settings: UiSettings;
+  private hudHeight = HUD_HEIGHT;
   private windowBounds: Bounds | undefined;
   private readonly settingsPath: string;
 
@@ -115,9 +120,10 @@ export class DesktopPresence {
     if (!win) return;
     if (this.settings.chrome !== "hud") this.patch({ chrome: "hud" });
     if (!this.windowBounds && !win.isMaximized()) this.windowBounds = win.getBounds();
-    const area = screen.getPrimaryDisplay().bounds;
+    this.hudHeight = HUD_HEIGHT;
+    win.setMinimumSize(200, HUD_HEIGHT);
     win.setSkipTaskbar(true);
-    win.setBounds({ x: area.x, y: area.y, width: area.width, height: HUD_HEIGHT });
+    this.placeHud(win);
     this.applyLook();
     if (!win.isVisible()) win.showInactive();
   }
@@ -125,7 +131,12 @@ export class DesktopPresence {
   private restoreWindow(): void {
     const win = this.window;
     if (!win) return;
+    if (win.isMaximized()) win.unmaximize();
     win.setSkipTaskbar(false);
+    win.setResizable(true);
+    win.setMinimumSize(1, 1);
+    win.setMaximumSize(16384, 16384);
+    win.setMinimumSize(960, 640);
     const bounds = this.windowBounds ?? { x: 120, y: 80, width: 1280, height: 860 };
     win.setBounds(bounds);
     this.applyLook();
@@ -136,11 +147,46 @@ export class DesktopPresence {
   private applyLook(): void {
     const win = this.window;
     if (!win) return;
-    win.setOpacity(this.settings.opacity / 100);
+    const boost = this.hovering ? 30 : 0;
+    win.setOpacity(clamp(this.settings.opacity - boost, 15, 95) / 100);
     if (this.settings.overlay) win.setAlwaysOnTop(true, "screen-saver");
     else win.setAlwaysOnTop(false);
     const passClicks = this.settings.chrome === "hud" && !this.settings.overlay;
     win.setIgnoreMouseEvents(passClicks, passClicks ? { forward: true } : undefined);
+  }
+
+  setHudHeight(height: number): void {
+    const next = clamp(Math.round(height), HUD_HEIGHT, HUD_HEIGHT_MAX);
+    if (next === this.hudHeight) return;
+    this.hudHeight = next;
+    const win = this.window;
+    if (!win || this.settings.chrome !== "hud") return;
+    this.placeHud(win);
+  }
+
+  private placeHud(win: BrowserWindow): void {
+    const area = screen.getPrimaryDisplay().bounds;
+    win.setMaximumSize(area.width, HUD_HEIGHT_MAX);
+    win.setBounds({ x: area.x, y: area.y, width: area.width, height: this.hudHeight });
+  }
+
+  setHover(hovering: boolean): void {
+    if (hovering) {
+      if (this.hoverLeaveTimer) {
+        clearTimeout(this.hoverLeaveTimer);
+        this.hoverLeaveTimer = undefined;
+      }
+      if (this.hovering) return;
+      this.hovering = true;
+      this.applyLook();
+      return;
+    }
+    if (!this.hovering || this.hoverLeaveTimer) return;
+    this.hoverLeaveTimer = setTimeout(() => {
+      this.hoverLeaveTimer = undefined;
+      this.hovering = false;
+      this.applyLook();
+    }, HOVER_HOLD_MS);
   }
 
   minimize(): void {

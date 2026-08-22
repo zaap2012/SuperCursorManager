@@ -16,6 +16,10 @@ export function formatBytes(bytes: number): string {
   return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`;
 }
 
+export function formatBytesPerSec(bytesPerSec: number): string {
+  return `${formatBytes(Math.max(0, bytesPerSec))}/s`;
+}
+
 export function formatElapsed(from: number, now = Date.now()): string {
   const seconds = Math.max(0, Math.round((now - from) / 1000));
   if (seconds < 60) return `${seconds}s`;

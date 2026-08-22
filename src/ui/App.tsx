@@ -28,9 +28,20 @@ export function App() {
   useEffect(() => {
     client.start();
     const tick = setInterval(() => setNow(Date.now()), 1000);
+    const enter = () => void client.setHover(true);
+    const leave = () => void client.setHover(false);
+    window.addEventListener("mouseenter", enter);
+    window.addEventListener("mouseleave", leave);
+    document.addEventListener("mouseenter", enter);
+    document.addEventListener("mouseleave", leave);
     return () => {
       client.stop();
       clearInterval(tick);
+      window.removeEventListener("mouseenter", enter);
+      window.removeEventListener("mouseleave", leave);
+      document.removeEventListener("mouseenter", enter);
+      document.removeEventListener("mouseleave", leave);
+      void client.setHover(false);
     };
   }, [client]);
 
@@ -42,9 +53,19 @@ export function App() {
   return (
     <div className={`app view-${view} chrome-${chrome}`}>
       {chrome === "hud" ? (
-        <HudStrip sessions={live} now={now} />
+        <HudStrip
+          sessions={live}
+          now={now}
+          resources={snap.resources}
+          onHeight={(h) => void client.setHudHeight(h)}
+        />
       ) : (
         <>
+      <WindowControls
+        onMin={() => void client.windowAction("minimize")}
+        onMax={() => void client.windowAction("maximize")}
+        onClose={() => void client.windowAction("close")}
+      />
       <header className="topbar">
         <div>
           <p className="logo">{snap.brand.name}</p>
@@ -78,11 +99,6 @@ export function App() {
           >
             {cursor?.installed ? "Cursor conectado" : busy ? "Instalando…" : "Instalar Cursor"}
           </button>
-          <WindowControls
-            onMin={() => void client.windowAction("minimize")}
-            onMax={() => void client.windowAction("maximize")}
-            onClose={() => void client.windowAction("close")}
-          />
         </div>
       </header>
 

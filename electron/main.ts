@@ -67,7 +67,7 @@ function createWindow(): BrowserWindow {
     width: 1280,
     height: 860,
     minWidth: 420,
-    minHeight: 96,
+    minHeight: 22,
     title: brand.name,
     icon: iconPath,
     backgroundColor: "#00000000",

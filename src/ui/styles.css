@@ -38,7 +38,8 @@ body,
   padding: 0;
   max-width: none;
   min-height: 0;
-  height: 100vh;
+  height: 100%;
+  overflow: hidden;
   border-radius: 0;
   background: color-mix(in srgb, #101218 78%, transparent);
 }
@@ -46,22 +47,48 @@ body,
 .hud-strip {
   display: flex;
   align-items: center;
+  align-content: center;
   gap: 8px;
-  height: 100%;
-  padding: 0 8px;
-  overflow-x: auto;
-  font-size: 12px;
+  min-height: 22px;
+  max-height: 66px;
+  padding: 2px 8px;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+.hud-live {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.hud-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+  max-width: 58%;
+  color: color-mix(in srgb, var(--muted) 88%, var(--text));
+  font-size: 10px;
+  letter-spacing: 0.02em;
   white-space: nowrap;
 }
 
 .hud-chip {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  border-radius: 8px;
+  gap: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
   background: color-mix(in srgb, #0c0f14 70%, transparent);
   border: 1px solid var(--line);
+  white-space: nowrap;
 }
 
 .hud-chip b {
@@ -70,15 +97,18 @@ body,
 
 .hud-now {
   color: var(--text);
-  max-width: 220px;
+  max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .win-controls {
+  position: fixed;
+  top: 10px;
+  right: 12px;
+  z-index: 100;
   display: flex;
   gap: 2px;
-  margin-left: 8px;
   -webkit-app-region: no-drag;
 }
 
@@ -133,7 +163,7 @@ button {
   justify-content: space-between;
   gap: 16px;
   align-items: center;
-  padding: 16px 18px;
+  padding: 16px 130px 16px 18px;
 }
 
 .logo {
@@ -195,9 +225,22 @@ button:disabled {
 
 .resource-summary {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 12px;
   flex: 1;
+}
+
+.usage-track {
+  height: 8px;
+  margin: 0 0 12px;
+  border-radius: 99px;
+  background: #0c0f14;
+  overflow: hidden;
+}
+
+.usage-fill {
+  height: 100%;
+  background: var(--accent);
 }
 
 .metric span,

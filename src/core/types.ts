@@ -70,6 +70,17 @@ export type ProcessGroupSnapshot = {
   processCount: number;
 };
 
+export type HostIoSnapshot = {
+  readBytesPerSec: number;
+  writeBytesPerSec: number;
+};
+
+export type HostNetSnapshot = {
+  recvBytesPerSec: number;
+  sentBytesPerSec: number;
+  totalBytesPerSec: number;
+};
+
 export type ResourceSnapshot = {
   sampledAt: number;
   host: {
@@ -78,6 +89,8 @@ export type ResourceSnapshot = {
     memTotalBytes: number;
     cpu: HostCpuSnapshot;
     memory: HostMemorySnapshot;
+    io: HostIoSnapshot;
+    net: HostNetSnapshot;
   };
   groups: Record<string, ProcessGroupSnapshot>;
 };

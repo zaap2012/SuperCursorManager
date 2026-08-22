@@ -36,6 +36,8 @@ export class CompositeResourceSampler {
           cores: [],
         },
         memory: { usedBytes: 0, totalBytes: 0, availableBytes: 0, usedPercent: 0 },
+        io: { readBytesPerSec: 0, writeBytesPerSec: 0 },
+        net: { recvBytesPerSec: 0, sentBytesPerSec: 0, totalBytesPerSec: 0 },
       },
       groups: {},
     };

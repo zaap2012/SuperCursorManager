@@ -1,35 +1,61 @@
-import type { SessionSnapshot } from "../../core/types";
+import { useEffect, useRef } from "react";
+import type { ResourceSnapshot, SessionSnapshot } from "../../core/types";
 import { formatElapsed, statusLabel } from "../format";
+import { HudStats } from "./HudStats";
 
-export function HudStrip({ sessions, now }: { sessions: SessionSnapshot[]; now: number }) {
+export function HudStrip({
+  sessions,
+  now,
+  resources,
+  onHeight,
+}: {
+  sessions: SessionSnapshot[];
+  now: number;
+  resources: ResourceSnapshot | null;
+  onHeight?: (height: number) => void;
+}) {
+  const ref = useRef<HTMLElement>(null);
   const items = uniqueByProject(sessions.filter((s) => s.status === "active" || s.status === "waiting"));
 
-  if (!items.length) {
-    return <section className="hud-strip">Nenhum agente ativo</section>;
-  }
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !onHeight) return;
+    const report = () => onHeight(el.scrollHeight);
+    report();
+    const observer = new ResizeObserver(report);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [items.length, onHeight]);
 
   return (
-    <section className="hud-strip">
-      {items.map((session) => {
-        const running = session.tools.find((tool) => tool.status === "running");
-        const done = session.status !== "active" && session.status !== "waiting";
-        const clockEnd = done ? session.updatedAt : now;
-        return (
-          <article key={session.id} className={`hud-chip status-${session.status}`}>
-            <b>{session.project.name}</b>
-            <span className={`dot ${session.status === "active" ? "on" : ""}`}>
-              {statusLabel(session.status)}
-            </span>
-            <span className="hud-now" title={session.headline}>
-              {summarize(session, running?.name)}
-            </span>
-            {session.status === "active" && session.eta?.label && !/conclu/i.test(session.eta.label) ? (
-              <span>{session.eta.label}</span>
-            ) : null}
-            <span>{formatElapsed(session.startedAt, clockEnd)}</span>
-          </article>
-        );
-      })}
+    <section ref={ref} className="hud-strip">
+      <div className="hud-live">
+        {!items.length ? (
+          <span className="muted">Nenhum agente ativo</span>
+        ) : (
+          items.map((session) => {
+            const running = session.tools.find((tool) => tool.status === "running");
+            const done = session.status !== "active" && session.status !== "waiting";
+            const clockEnd = done ? session.updatedAt : now;
+            return (
+              <article key={session.id} className={`hud-chip status-${session.status}`}>
+                <b>{session.project.name}</b>
+                <span className={`dot ${session.status === "active" ? "on" : ""}`}>
+                  {statusLabel(session.status)}
+                </span>
+                <span className="hud-now" title={session.headline}>
+                  {summarize(session, running?.name)}
+                </span>
+                {session.status === "active" && session.eta?.label && !/conclu/i.test(session.eta.label) ? (
+                  <span>{session.eta.label}</span>
+                ) : null}
+                <span>{formatElapsed(session.startedAt, clockEnd)}</span>
+              </article>
+            );
+          })
+        )}
+      </div>
+      <HudStats resources={resources} />
     </section>
   );
 }
