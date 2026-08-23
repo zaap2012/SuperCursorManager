@@ -74,7 +74,7 @@ function createWindow(): BrowserWindow {
     transparent: true,
     frame: false,
     autoHideMenuBar: true,
-    show: !presence.startedHidden(),
+    show: false,
     skipTaskbar: presence.startedHidden() || presence.current().chrome === "hud",
     alwaysOnTop: presence.current().overlay,
     webPreferences: {
@@ -85,6 +85,9 @@ function createWindow(): BrowserWindow {
   });
 
   presence.attach(win);
+  if (!presence.startedHidden() && presence.current().chrome !== "hud") {
+    win.show();
+  }
   win.on("show", () => {
     if (presence.current().chrome !== "hud") win.setSkipTaskbar(false);
   });

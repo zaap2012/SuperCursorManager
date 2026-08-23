@@ -43,7 +43,7 @@ export class DesktopPresence {
   attach(window: BrowserWindow): void {
     this.window = window;
     this.applyLook();
-    if (this.settings.chrome === "hud") this.dockHud();
+    if (this.startedHidden() || this.settings.chrome === "hud") this.dockHud();
     window.on("close", (event) => {
       if (this.quitting) return;
       event.preventDefault();
@@ -82,17 +82,37 @@ export class DesktopPresence {
       app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
       return;
     }
-    if (app.isPackaged) {
-      app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true, args: ["--hidden"] });
-    } else {
-      app.setLoginItemSettings({
-        openAtLogin: true,
-        openAsHidden: true,
-        path: process.execPath,
-        args: [this.projectRoot, "--hidden"],
-      });
-    }
+    const args = app.isPackaged ? ["--hidden"] : [this.projectRoot, "--hidden"];
+    app.setLoginItemSettings({
+      openAtLogin: true,
+      openAsHidden: true,
+      path: process.execPath,
+      args,
+    });
+    this.writeStartupShortcut();
     this.pruneDuplicateRunKeys();
+  }
+
+  private writeStartupShortcut(): void {
+    if (process.platform !== "win32") return;
+    const startup = path.join(
+      os.homedir(),
+      "AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup",
+      `${brand.name}.lnk`,
+    );
+    const target = process.execPath;
+    const args = app.isPackaged ? "--hidden" : `"${this.projectRoot}" --hidden`;
+    const workdir = app.isPackaged ? path.dirname(process.execPath) : this.projectRoot;
+    execFile(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-Command",
+        `$s = (New-Object -ComObject WScript.Shell).CreateShortcut('${startup.replace(/'/g, "''")}'); $s.TargetPath = '${target.replace(/'/g, "''")}'; $s.Arguments = '${args.replace(/'/g, "''")}'; $s.WorkingDirectory = '${workdir.replace(/'/g, "''")}'; $s.WindowStyle = 7; $s.Save()`,
+      ],
+      { windowsHide: true },
+      () => undefined,
+    );
   }
 
   private pruneDuplicateRunKeys(): void {
@@ -111,7 +131,11 @@ export class DesktopPresence {
   }
 
   startedHidden(): boolean {
-    return process.argv.includes("--hidden") || app.getLoginItemSettings().wasOpenedAsHidden;
+    return (
+      process.argv.includes("--hidden") ||
+      process.argv.includes("--hud") ||
+      app.getLoginItemSettings().wasOpenedAsHidden
+    );
   }
 
   private setWindowOpacity(percent: number): void {
