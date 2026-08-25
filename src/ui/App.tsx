@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { brand } from "../brand";
 import type { AppSnapshot } from "../core/types";
 import { HudStrip } from "./components/HudStrip";
+import { OpacitySliders } from "./components/OpacitySliders";
 import { ResourceBar } from "./components/ResourceBar";
 import { SessionCard } from "./components/SessionCard";
 import { WindowControls } from "./components/WindowControls";
@@ -15,7 +16,7 @@ const empty: AppSnapshot = {
   sessions: [],
   projects: [],
   integrations: [],
-  ui: { chrome: "window", opacityWindow: 90, opacityHud: 92, overlay: false },
+  ui: { chrome: "window", opacityWindow: 90, opacityHud: 92, overlay: false, hudScreen: 1 },
 };
 
 export function App() {
@@ -28,27 +29,29 @@ export function App() {
   useEffect(() => {
     client.start();
     const tick = setInterval(() => setNow(Date.now()), 1000);
-    const enter = () => void client.setHover(true);
-    const leave = () => void client.setHover(false);
-    window.addEventListener("mouseenter", enter);
-    window.addEventListener("mouseleave", leave);
-    document.addEventListener("mouseenter", enter);
-    document.addEventListener("mouseleave", leave);
     return () => {
       client.stop();
       clearInterval(tick);
-      window.removeEventListener("mouseenter", enter);
-      window.removeEventListener("mouseleave", leave);
-      document.removeEventListener("mouseenter", enter);
-      document.removeEventListener("mouseleave", leave);
-      void client.setHover(false);
     };
   }, [client]);
 
   const cursor = snap.integrations.find((item) => item.id === "ide.cursor");
   const chrome = snap.ui?.chrome ?? "window";
+  const ui = snap.ui ?? empty.ui;
   const live = snap.sessions.filter((s) => s.status === "active" || s.status === "waiting");
   const done = snap.sessions.filter((s) => s.status !== "active" && s.status !== "waiting");
+
+  if (location.hash.replace(/^#/, "") === "opacity") {
+    return (
+      <div className="app chrome-window opacity-panel">
+        <OpacitySliders
+          ui={ui}
+          onChange={(target, percent) => void client.setOpacity(target, percent)}
+          onClose={() => window.close()}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={`app view-${view} chrome-${chrome}`}>
@@ -76,6 +79,7 @@ export function App() {
           <span className={`dot ${snap.ingest.listening ? "on" : ""}`}>
             {snap.ingest.listening ? "ingest ok" : "ingest off"} · :{snap.ingest.port}
           </span>
+          <OpacitySliders ui={ui} onChange={(target, percent) => void client.setOpacity(target, percent)} />
           <button
             type="button"
             className="ghost"

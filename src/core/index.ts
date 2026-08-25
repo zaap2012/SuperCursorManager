@@ -6,3 +6,4 @@ export * from "./eta.js";
 export * from "./resources.js";
 export * from "./store.js";
 export * from "./path.js";
+export * from "./text.js";

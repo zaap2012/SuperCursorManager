@@ -1,5 +1,6 @@
 import type { ResourceSnapshot } from "../../core/types";
 import { formatBytes, formatKbPerSec, formatMhz } from "../format";
+import { useSmoothNumber, type FlashDir } from "../useSmoothNumber";
 import type { ViewMode } from "../viewMode";
 
 export function ResourceBar({
@@ -9,50 +10,68 @@ export function ResourceBar({
   resources: ResourceSnapshot | null;
   view: ViewMode;
 }) {
-  if (!resources?.host.cpu) {
-    return <section className="resource-panel muted">Medindo recursos do PC…</section>;
-  }
-
-  const { cpu, memory, io, net } = resources.host;
-  const cursor = resources.groups["ide.cursor"];
+  const cpu = resources?.host.cpu;
+  const memory = resources?.host.memory;
+  const io = resources?.host.io;
+  const net = resources?.host.net;
+  const cursor = resources?.groups["ide.cursor"];
   const analytic = view === "analytic";
   const digits = analytic ? 1 : 0;
+
+  const curCpu = useSmoothNumber(cursor?.cpuPercent ?? 0);
+  const ram = useSmoothNumber(memory?.usedPercent ?? 0);
+  const cpuUse = useSmoothNumber(cpu?.usagePercent ?? 0);
+  const coresOn = useSmoothNumber(cpu?.activeCores ?? 0);
+  const readKb = useSmoothNumber((io?.readBytesPerSec ?? 0) / 1024);
+  const writeKb = useSmoothNumber((io?.writeBytesPerSec ?? 0) / 1024);
+  const downKb = useSmoothNumber((net?.recvBytesPerSec ?? 0) / 1024);
+  const upKb = useSmoothNumber((net?.sentBytesPerSec ?? 0) / 1024);
+
+  if (!cpu || !memory) {
+    return <section className="resource-panel muted">Medindo recursos do PC…</section>;
+  }
 
   return (
     <section className={`resource-panel ${view}`}>
       <div className="resource-summary">
         <Metric
           label="Cursor"
-          value={cursor ? `${cursor.cpuPercent.toFixed(digits)}%` : "—"}
+          value={cursor ? `${curCpu.value.toFixed(digits)}%` : "—"}
           hint={cursor ? `${formatBytes(cursor.memBytes)} · ${cursor.processCount} proc` : "não detectado"}
-          bar={cursor?.cpuPercent}
+          bar={cursor ? curCpu.value : undefined}
+          flash={curCpu.flash}
         />
         <Metric
           label="RAM (total)"
-          value={`${memory.usedPercent.toFixed(digits)}%`}
+          value={`${ram.value.toFixed(digits)}%`}
           hint={`${formatBytes(memory.usedBytes)} / ${formatBytes(memory.totalBytes)}`}
-          bar={memory.usedPercent}
+          bar={ram.value}
+          flash={ram.flash}
         />
         <Metric
           label="CPU (total)"
-          value={`${cpu.usagePercent.toFixed(digits)}%`}
-          hint={`${formatMhz(cpu.currentMhz)} · ${cpu.activeCores}/${cpu.logicalCores} núcleos`}
-          bar={cpu.usagePercent}
+          value={`${cpuUse.value.toFixed(digits)}%`}
+          hint={`${formatMhz(cpu.currentMhz)} · ${Math.round(coresOn.value)}/${cpu.logicalCores} núcleos`}
+          bar={cpuUse.value}
+          flash={cpuUse.flash}
         />
         <Metric
           label="Leitura (total)"
-          value={formatKbPerSec(io?.readBytesPerSec ?? 0)}
+          value={formatKbPerSec(readKb.value * 1024)}
           hint="disco · KB/s"
+          flash={readKb.flash}
         />
         <Metric
           label="Gravação (total)"
-          value={formatKbPerSec(io?.writeBytesPerSec ?? 0)}
+          value={formatKbPerSec(writeKb.value * 1024)}
           hint="disco · KB/s"
+          flash={writeKb.flash}
         />
         <Metric
           label="Internet (total)"
-          value={`${formatKbPerSec(net?.recvBytesPerSec ?? 0)} / ${formatKbPerSec(net?.sentBytesPerSec ?? 0)}`}
+          value={`${formatKbPerSec(downKb.value * 1024)} / ${formatKbPerSec(upKb.value * 1024)}`}
           hint="D · U"
+          flash={downKb.flash ?? upKb.flash}
         />
       </div>
 
@@ -64,7 +83,7 @@ export function ResourceBar({
             <dl>
               <div>
                 <dt>Uso atual</dt>
-                <dd>{cpu.usagePercent.toFixed(1)}%</dd>
+                <dd className={flashClass(cpuUse.flash)}>{cpuUse.value.toFixed(1)}%</dd>
               </div>
               <div>
                 <dt>Clock atual</dt>
@@ -76,8 +95,8 @@ export function ResourceBar({
               </div>
               <div>
                 <dt>Núcleos ativos</dt>
-                <dd>
-                  {cpu.activeCores} / {cpu.logicalCores}
+                <dd className={flashClass(coresOn.flash)}>
+                  {Math.round(coresOn.value)} / {cpu.logicalCores}
                 </dd>
               </div>
               <div>
@@ -95,20 +114,17 @@ export function ResourceBar({
             </dl>
             <div className="cores">
               {cpu.cores.map((core) => (
-                <div key={core.index} className={`core ${core.active ? "on" : ""}`} title={`CPU ${core.index}`}>
-                  <span>{core.index}</span>
-                  <div className="core-track">
-                    <div className="core-fill" style={{ height: `${Math.min(100, core.usagePercent)}%` }} />
-                  </div>
-                  <small>{core.usagePercent.toFixed(0)}%</small>
-                </div>
+                <CoreMeter key={core.index} index={core.index} usage={core.usagePercent} active={core.active} />
               ))}
             </div>
           </article>
           <article>
             <h3>Memória</h3>
-            <div className="usage-track" title={`${memory.usedPercent.toFixed(1)}%`}>
-              <div className="usage-fill" style={{ width: `${Math.min(100, memory.usedPercent)}%` }} />
+            <div className="usage-track" title={`${ram.value.toFixed(1)}%`}>
+              <div
+                className={`usage-fill ${flashClass(ram.flash)}`}
+                style={{ width: `${Math.min(100, ram.value)}%` }}
+              />
             </div>
             <dl>
               <div>
@@ -125,26 +141,26 @@ export function ResourceBar({
               </div>
               <div>
                 <dt>Pressão</dt>
-                <dd>{memory.usedPercent.toFixed(1)}%</dd>
+                <dd className={flashClass(ram.flash)}>{ram.value.toFixed(1)}%</dd>
               </div>
             </dl>
             <h3>Disco e rede</h3>
             <dl>
               <div>
                 <dt>Leitura</dt>
-                <dd>{formatKbPerSec(io?.readBytesPerSec ?? 0)}</dd>
+                <dd className={flashClass(readKb.flash)}>{formatKbPerSec(readKb.value * 1024)}</dd>
               </div>
               <div>
                 <dt>Gravação</dt>
-                <dd>{formatKbPerSec(io?.writeBytesPerSec ?? 0)}</dd>
+                <dd className={flashClass(writeKb.flash)}>{formatKbPerSec(writeKb.value * 1024)}</dd>
               </div>
               <div>
                 <dt>Download</dt>
-                <dd>{formatKbPerSec(net?.recvBytesPerSec ?? 0)}</dd>
+                <dd className={flashClass(downKb.flash)}>{formatKbPerSec(downKb.value * 1024)}</dd>
               </div>
               <div>
                 <dt>Upload</dt>
-                <dd>{formatKbPerSec(net?.sentBytesPerSec ?? 0)}</dd>
+                <dd className={flashClass(upKb.flash)}>{formatKbPerSec(upKb.value * 1024)}</dd>
               </div>
             </dl>
             {cursor ? (
@@ -153,7 +169,7 @@ export function ResourceBar({
                 <dl>
                   <div>
                     <dt>CPU do grupo</dt>
-                    <dd>{cursor.cpuPercent.toFixed(1)}%</dd>
+                    <dd className={flashClass(curCpu.flash)}>{curCpu.value.toFixed(1)}%</dd>
                   </div>
                   <div>
                     <dt>RAM do grupo</dt>
@@ -173,27 +189,54 @@ export function ResourceBar({
   );
 }
 
+function CoreMeter({ index, usage, active }: { index: number; usage: number; active: boolean }) {
+  const smooth = useSmoothNumber(usage);
+  return (
+    <div className={`core ${active ? "on" : ""}`} title={`CPU ${index}`}>
+      <span>{index}</span>
+      <div className="core-track">
+        <div
+          className={`core-fill ${flashClass(smooth.flash)}`}
+          style={{ height: `${Math.min(100, smooth.value)}%` }}
+        />
+      </div>
+      <small className={flashClass(smooth.flash)}>{Math.round(smooth.value)}%</small>
+    </div>
+  );
+}
+
 function Metric({
   label,
   value,
   hint,
   bar,
+  flash,
 }: {
   label: string;
   value: string;
   hint: string;
   bar?: number;
+  flash?: FlashDir;
 }) {
   return (
     <div className="metric">
       <span>{label}</span>
-      <strong>{value}</strong>
+      <strong className={flashClass(flash)}>{value}</strong>
       {bar != null ? (
         <div className="usage-track" title={`${Math.round(bar)}%`}>
-          <div className="usage-fill" style={{ width: `${Math.min(100, Math.max(0, bar))}%` }} />
+          <div
+            className={`usage-fill ${flashClass(flash)}`}
+            style={{ width: `${Math.min(100, Math.max(0, bar))}%` }}
+          />
         </div>
       ) : null}
       <small>{hint}</small>
     </div>
   );
+}
+
+function flashClass(flash: FlashDir | undefined): string {
+  if (flash === "up") return "flash-up";
+  if (flash === "down") return "flash-down";
+  return "";
 }

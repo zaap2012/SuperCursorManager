@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import type { ResourceSnapshot, SessionSnapshot } from "../../core/types";
 import { formatElapsed, statusLabel } from "../format";
 import { HudStats } from "./HudStats";
+import { clipText } from "../../core/text";
 
 export function HudStrip({
   sessions,
@@ -91,7 +92,7 @@ function summarize(session: SessionSnapshot, runningName?: string): string {
   }
   const head = session.headline.replace(/\s+/g, " ").trim();
   if (head && !/^(conclu[ií]do|finalizado|cancelado|falhou)$/i.test(head)) {
-    return head.slice(0, 48);
+    return clipText(head, 48);
   }
   return `${session.stats.toolCount} tools`;
 }

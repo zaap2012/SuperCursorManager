@@ -1,6 +1,8 @@
+import { clipText } from "../../core/text";
 import type { SessionSnapshot } from "../../core/types";
 import { formatElapsed, statusLabel } from "../format";
 import type { ViewMode } from "../viewMode";
+import { ActionStack } from "./ActionStack";
 
 export function SessionCard({
   session,
@@ -18,6 +20,9 @@ export function SessionCard({
   const running = session.tools.find((tool) => tool.status === "running");
   const analytic = view === "analytic" || chrome === "hud";
   const hud = chrome === "hud";
+  const nowText = running
+    ? `${running.name}${running.detail ? `: ${truncate(running.detail, 48)}` : ""}`
+    : "";
 
   return (
     <article className={`card status-${session.status} view-${view} ${hud ? "hud-card" : ""}`}>
@@ -65,9 +70,11 @@ export function SessionCard({
               <dt>Modelo</dt>
               <dd>{session.model ?? "—"}</dd>
             </div>
-            <div>
-              <dt>Agora</dt>
-              <dd>{running ? `${running.name}${running.detail ? `: ${truncate(running.detail, 28)}` : ""}` : "—"}</dd>
+            <div className="agora-cell">
+              <dt>Ações</dt>
+              <dd>
+                <ActionStack text={nowText} />
+              </dd>
             </div>
             <div>
               <dt>Tools</dt>
@@ -80,9 +87,11 @@ export function SessionCard({
           </>
         ) : (
           <>
-            <div>
-              <dt>Agora</dt>
-              <dd>{running?.name ?? `${session.stats.toolCount} tools`}</dd>
+            <div className="agora-cell">
+              <dt>Ações</dt>
+              <dd>
+                <ActionStack text={nowText} />
+              </dd>
             </div>
             <div>
               <dt>Arquivos</dt>
@@ -155,5 +164,5 @@ export function SessionCard({
 }
 
 function truncate(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+  return clipText(text, max);
 }

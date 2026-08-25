@@ -132,6 +132,7 @@ export type UiSettings = {
   opacityWindow: number;
   opacityHud: number;
   overlay: boolean;
+  hudScreen: number;
 };
 
 export type AppSnapshot = {

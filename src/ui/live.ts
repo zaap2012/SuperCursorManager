@@ -34,15 +34,15 @@ export class LiveClient {
     await this.post(`/v1/window/${action}`);
   }
 
+  async setOpacity(target: "window" | "hud", percent: number): Promise<void> {
+    await this.post("/v1/window/opacity", { target, percent });
+  }
+
   async setHudHeight(height: number): Promise<void> {
     const next = Math.round(height);
     if (next === this.lastHudHeight) return;
     this.lastHudHeight = next;
     await this.post("/v1/window/hud-height", { height: next });
-  }
-
-  async setHover(hovering: boolean): Promise<void> {
-    await this.post("/v1/window/hover", { hovering });
   }
 
   async finishSession(id: string): Promise<void> {
@@ -71,7 +71,7 @@ export class LiveClient {
       const data = (await res.json()) as AppSnapshot;
       this.onSnapshot({
         ...data,
-        ui: data.ui ?? { chrome: "window", opacityWindow: 90, opacityHud: 92, overlay: false },
+        ui: data.ui ?? { chrome: "window", opacityWindow: 90, opacityHud: 92, overlay: false, hudScreen: 1 },
       });
     } catch {
       // server still booting
@@ -87,7 +87,7 @@ export class LiveClient {
         const data = JSON.parse(String(event.data)) as AppSnapshot;
         this.onSnapshot({
           ...data,
-          ui: data.ui ?? { chrome: "window", opacityWindow: 90, opacityHud: 92, overlay: false },
+          ui: data.ui ?? { chrome: "window", opacityWindow: 90, opacityHud: 92, overlay: false, hudScreen: 1 },
         });
       } catch {
         // ignore malformed frame

@@ -34,8 +34,9 @@ export class LocalIngestServer {
       toggleMaximize(): void;
       dock(): void;
       show(): void;
-      setHover(hovering: boolean): void;
       setHudHeight(height: number): void;
+      setOpacity(target: "window" | "hud", percent: number): void;
+      showOpacityPanel(): void;
     },
   ) {}
 
@@ -157,16 +158,21 @@ export class LocalIngestServer {
         this.chrome?.show();
         return json(res, 200, { ok: true });
       }
+      if (req.method === "POST" && url === "/v1/window/opacity") {
+        const body = await readBody(req);
+        const parsed = JSON.parse(body || "{}") as { target?: string; percent?: number };
+        const target = parsed.target === "hud" ? "hud" : "window";
+        this.chrome?.setOpacity(target, Number(parsed.percent) || 0);
+        return json(res, 200, { ok: true });
+      }
+      if (req.method === "POST" && url === "/v1/window/opacity-panel") {
+        this.chrome?.showOpacityPanel();
+        return json(res, 200, { ok: true });
+      }
       if (req.method === "POST" && url === "/v1/window/hud-height") {
         const body = await readBody(req);
         const parsed = JSON.parse(body || "{}") as { height?: number };
         this.chrome?.setHudHeight(Number(parsed.height) || 0);
-        return json(res, 200, { ok: true });
-      }
-      if (req.method === "POST" && url === "/v1/window/hover") {
-        const body = await readBody(req);
-        const parsed = JSON.parse(body || "{}") as { hovering?: boolean };
-        this.chrome?.setHover(Boolean(parsed.hovering));
         return json(res, 200, { ok: true });
       }
       json(res, 404, { error: "not_found" });

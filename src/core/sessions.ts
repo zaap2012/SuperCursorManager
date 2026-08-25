@@ -1,4 +1,5 @@
 import { basename } from "./path.js";
+import { clipText } from "./text.js";
 import { HeuristicEtaStrategy, statusAfterSilence, type EtaStrategy } from "./eta.js";
 import type {
   ActivityEvent,
@@ -310,9 +311,7 @@ export class KindSessionFactory extends SessionFactory {
 }
 
 function truncate(text: string, max: number): string {
-  const clean = text.replace(/\s+/g, " ").trim();
-  if (clean.length <= max) return clean;
-  return `${clean.slice(0, max - 1)}…`;
+  return clipText(text, max);
 }
 
 export const defaultEta = new HeuristicEtaStrategy();

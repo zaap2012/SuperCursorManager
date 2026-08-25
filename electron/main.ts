@@ -1,4 +1,5 @@
 import { app, BrowserWindow, shell } from "electron";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { brand } from "../src/brand.js";
@@ -97,16 +98,19 @@ function createWindow(): BrowserWindow {
     return { action: "deny" };
   });
 
+  const packed = path.join(__dirname, "../renderer/index.html");
+  const hidden = presence.startedHidden();
   const devUrl = process.env.VITE_DEV_SERVER_URL ?? "http://127.0.0.1:5173";
-  if (!app.isPackaged) {
+  if (app.isPackaged || hidden) {
+    if (fs.existsSync(packed)) void win.loadFile(packed);
+    else void win.loadURL(devUrl);
+  } else if (!app.isPackaged) {
     const load = () => win.loadURL(devUrl);
     win.webContents.on("did-fail-load", () => {
-      const packed = path.join(__dirname, "../renderer/index.html");
-      win.loadFile(packed).catch(() => setTimeout(load, 800));
+      if (fs.existsSync(packed)) void win.loadFile(packed);
+      else setTimeout(load, 800);
     });
     load();
-  } else {
-    win.loadFile(path.join(__dirname, "../renderer/index.html"));
   }
 
   if (presence.startedHidden()) {
@@ -144,7 +148,7 @@ app.whenReady().then(() => {
     }
   };
   void sample();
-  resourceTimer = setInterval(() => void sample(), 333);
+  resourceTimer = setInterval(() => void sample(), 1000);
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

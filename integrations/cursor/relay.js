@@ -11,9 +11,23 @@ try {
 raw = String(raw).replace(/^\s+|\s+$/g, "");
 if (!raw) raw = "{}";
 raw = raw.replace(/[\r\n]+/g, "");
-var receivedAt = (new Date()).getTime();
-var line = '{"schemaVersion":1,"source":{"kind":"ide.cursor"},"receivedAt":' + receivedAt + ',"payload":' + raw + "}\r\n";
-var file = fso.OpenTextFile(spool, 8, true);
-file.Write(line);
-file.Close();
+var receivedAt = new Date().getTime();
+var line = '{"schemaVersion":1,"source":{"kind":"ide.cursor"},"receivedAt":' + receivedAt + ',"payload":' + raw + "}\n";
+appendUtf8(spool, line);
 WScript.StdOut.WriteLine("{}");
+
+function appendUtf8(filePath, text) {
+  var adTypeText = 2;
+  var adSaveCreateOverWrite = 2;
+  var stm = new ActiveXObject("ADODB.Stream");
+  stm.Type = adTypeText;
+  stm.Charset = "UTF-8";
+  stm.Open();
+  if (fso.FileExists(filePath)) {
+    stm.LoadFromFile(filePath);
+    stm.Position = stm.Size;
+  }
+  stm.WriteText(text);
+  stm.SaveToFile(filePath, adSaveCreateOverWrite);
+  stm.Close();
+}

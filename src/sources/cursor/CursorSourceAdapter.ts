@@ -8,6 +8,7 @@ import {
   ToolActivityEvent,
   WorkspacePresenceEvent,
   projectFromRoots,
+  normalizeText,
   type ActivityEvent,
   type IngestEnvelope,
   type SessionStatus,
@@ -164,7 +165,8 @@ function asRecord(value: unknown): CursorPayload {
 }
 
 function str(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value : undefined;
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  return normalizeText(value);
 }
 
 function num(value: unknown): number | undefined {

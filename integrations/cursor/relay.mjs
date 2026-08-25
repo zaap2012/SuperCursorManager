@@ -7,7 +7,7 @@ const spool = path.join(home, "spool.jsonl");
 
 const chunks = [];
 for await (const chunk of process.stdin) chunks.push(chunk);
-const raw = Buffer.concat(chunks).toString("utf8").trim() || "{}";
+const raw = decodeUtf8(Buffer.concat(chunks)).trim() || "{}";
 
 let payload;
 try {
@@ -31,3 +31,9 @@ try {
 }
 
 process.stdout.write("{}\n");
+
+function decodeUtf8(buffer) {
+  const utf8 = buffer.toString("utf8");
+  if (!utf8.includes("\uFFFD")) return utf8;
+  return buffer.toString("latin1");
+}

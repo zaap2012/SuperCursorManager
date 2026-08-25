@@ -6,22 +6,21 @@ import path from "node:path";
 import { brand } from "../../brand.js";
 import type { ChromeMode, UiSettings } from "../../core/types.js";
 
-const OPACITY_STEPS = [15, 25, 35, 45, 55, 65, 75, 85, 90, 95];
+const OPACITY_MIN = 20;
+const OPACITY_MAX = 100;
 const HUD_HEIGHT = 22;
 const HUD_HEIGHT_MAX = HUD_HEIGHT * 3;
-const HOVER_HOLD_MS = 2000;
 
 type Bounds = { x: number; y: number; width: number; height: number };
 
 export class DesktopPresence {
   private tray: Tray | undefined;
   private quitting = false;
-  private hovering = false;
-  private hoverLeaveTimer: NodeJS.Timeout | undefined;
   private window: BrowserWindow | undefined;
   private settings: UiSettings;
   private hudHeight = HUD_HEIGHT;
   private windowBounds: Bounds | undefined;
+  private opacityPanel: BrowserWindow | undefined;
   private readonly settingsPath: string;
 
   constructor(
@@ -60,6 +59,14 @@ export class DesktopPresence {
     this.tray.setToolTip(brand.name);
     this.rebuildMenu();
     this.tray.on("click", () => this.show());
+    screen.on("display-added", () => this.onDisplaysChanged());
+    screen.on("display-removed", () => this.onDisplaysChanged());
+    screen.on("display-metrics-changed", () => this.onDisplaysChanged());
+  }
+
+  private onDisplaysChanged(): void {
+    this.rebuildMenu();
+    if (this.settings.chrome === "hud" && this.window) this.placeHud(this.window);
   }
 
   show(): void {
@@ -72,6 +79,7 @@ export class DesktopPresence {
 
   quit(): void {
     this.quitting = true;
+    this.opacityPanel?.destroy();
     this.tray?.destroy();
     app.quit();
   }
@@ -82,15 +90,30 @@ export class DesktopPresence {
       app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
       return;
     }
-    const args = app.isPackaged ? ["--hidden"] : [this.projectRoot, "--hidden"];
+    const electronExe = this.electronPath();
     app.setLoginItemSettings({
       openAtLogin: true,
       openAsHidden: true,
-      path: process.execPath,
-      args,
+      path: electronExe,
+      args: [this.projectRoot, "--hidden"],
     });
     this.writeStartupShortcut();
     this.pruneDuplicateRunKeys();
+    this.refreshStartupBundle();
+  }
+
+  private electronPath(): string {
+    const local = path.join(this.projectRoot, "node_modules/electron/dist/electron.exe");
+    return fs.existsSync(local) ? local : process.execPath;
+  }
+
+  private refreshStartupBundle(): void {
+    execFile(
+      "cmd.exe",
+      ["/d", "/c", "npx tsc -p tsconfig.node.json && npx vite build"],
+      { cwd: this.projectRoot, windowsHide: true, env: process.env },
+      () => undefined,
+    );
   }
 
   private writeStartupShortcut(): void {
@@ -100,9 +123,9 @@ export class DesktopPresence {
       "AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup",
       `${brand.name}.lnk`,
     );
-    const target = process.execPath;
-    const args = app.isPackaged ? "--hidden" : `"${this.projectRoot}" --hidden`;
-    const workdir = app.isPackaged ? path.dirname(process.execPath) : this.projectRoot;
+    const target = this.electronPath();
+    const args = `"${this.projectRoot}" --hidden`;
+    const workdir = this.projectRoot;
     execFile(
       "powershell.exe",
       [
@@ -138,16 +161,64 @@ export class DesktopPresence {
     );
   }
 
-  private setWindowOpacity(percent: number): void {
-    this.patch({ opacityWindow: clamp(percent, 15, 95) });
+  setOpacity(target: "window" | "hud", percent: number): void {
+    const value = clamp(percent, OPACITY_MIN, OPACITY_MAX);
+    if (target === "hud") this.patch({ opacityHud: value });
+    else this.patch({ opacityWindow: value });
     this.applyLook();
+  }
+
+  showOpacityPanel(): void {
+    if (this.opacityPanel && !this.opacityPanel.isDestroyed()) {
+      this.opacityPanel.show();
+      this.opacityPanel.focus();
+      return;
+    }
+    const panel = new BrowserWindow({
+      width: 340,
+      height: 168,
+      frame: false,
+      transparent: true,
+      alwaysOnTop: true,
+      skipTaskbar: true,
+      resizable: false,
+      show: true,
+      backgroundColor: "#00000000",
+      webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+    });
+    this.opacityPanel = panel;
+    panel.on("closed", () => {
+      if (this.opacityPanel === panel) this.opacityPanel = undefined;
+    });
+    const packed = path.join(this.projectRoot, "dist/renderer/index.html");
+    const hidden = this.startedHidden();
+    const devUrl = process.env.VITE_DEV_SERVER_URL ?? "http://127.0.0.1:5173";
+    if (app.isPackaged || hidden) {
+      void panel.loadFile(packed, { hash: "opacity" });
+      return;
+    }
+    void panel.loadURL(`${devUrl}/#opacity`);
+  }
+
+  private setHudScreen(screenIndex: number): void {
+    this.patch({ hudScreen: Math.max(1, Math.round(screenIndex)) });
+    if (this.settings.chrome === "hud" && this.window) this.placeHud(this.window);
     this.rebuildMenu();
   }
 
-  private setHudOpacity(percent: number): void {
-    this.patch({ opacityHud: clamp(percent, 15, 95) });
-    this.applyLook();
-    this.rebuildMenu();
+  private hudDisplays() {
+    const primary = screen.getPrimaryDisplay();
+    const rest = screen
+      .getAllDisplays()
+      .filter((item) => item.id !== primary.id)
+      .sort((a, b) => a.bounds.x - b.bounds.x || a.bounds.y - b.bounds.y);
+    return [primary, ...rest];
+  }
+
+  private hudArea() {
+    const list = this.hudDisplays();
+    const index = Math.min(Math.max(1, this.settings.hudScreen || 1), list.length) - 1;
+    return list[index]?.bounds ?? screen.getPrimaryDisplay().bounds;
   }
 
   private setOverlay(overlay: boolean): void {
@@ -195,9 +266,8 @@ export class DesktopPresence {
   private applyLook(): void {
     const win = this.window;
     if (!win) return;
-    const boost = this.hovering ? 30 : 0;
     const base = this.settings.chrome === "hud" ? this.settings.opacityHud : this.settings.opacityWindow;
-    win.setOpacity(clamp(base - boost, 15, 95) / 100);
+    win.setOpacity(clamp(base, OPACITY_MIN, OPACITY_MAX) / 100);
     if (this.settings.overlay) win.setAlwaysOnTop(true, "screen-saver");
     else win.setAlwaysOnTop(false);
     const passClicks = this.settings.chrome === "hud" && !this.settings.overlay;
@@ -214,28 +284,9 @@ export class DesktopPresence {
   }
 
   private placeHud(win: BrowserWindow): void {
-    const area = screen.getPrimaryDisplay().bounds;
+    const area = this.hudArea();
     win.setMaximumSize(area.width, HUD_HEIGHT_MAX);
     win.setBounds({ x: area.x, y: area.y, width: area.width, height: this.hudHeight });
-  }
-
-  setHover(hovering: boolean): void {
-    if (hovering) {
-      if (this.hoverLeaveTimer) {
-        clearTimeout(this.hoverLeaveTimer);
-        this.hoverLeaveTimer = undefined;
-      }
-      if (this.hovering) return;
-      this.hovering = true;
-      this.applyLook();
-      return;
-    }
-    if (!this.hovering || this.hoverLeaveTimer) return;
-    this.hoverLeaveTimer = setTimeout(() => {
-      this.hoverLeaveTimer = undefined;
-      this.hovering = false;
-      this.applyLook();
-    }, HOVER_HOLD_MS);
   }
 
   minimize(): void {
@@ -262,25 +313,25 @@ export class DesktopPresence {
 
   private rebuildMenu(): void {
     if (!this.tray) return;
-    const windowOpacity: MenuItemConstructorOptions[] = OPACITY_STEPS.map((value) => ({
-      label: `${value}%`,
-      type: "radio",
-      checked: this.settings.opacityWindow === value,
-      click: () => this.setWindowOpacity(value),
-    }));
-    const hudOpacity: MenuItemConstructorOptions[] = OPACITY_STEPS.map((value) => ({
-      label: `${value}%`,
-      type: "radio",
-      checked: this.settings.opacityHud === value,
-      click: () => this.setHudOpacity(value),
-    }));
+    const displays = this.hudDisplays();
+    const screenMenu: MenuItemConstructorOptions[] = displays.map((item, index) => {
+      const n = index + 1;
+      const { width, height } = item.bounds;
+      const primary = index === 0 ? " · principal" : "";
+      return {
+        label: `TELA ${n} (${width}×${height}${primary})`,
+        type: "radio",
+        checked: Math.min(this.settings.hudScreen || 1, displays.length) === n,
+        click: () => this.setHudScreen(n),
+      };
+    });
     this.tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: "Abrir janela", click: () => this.show() },
         { label: "Barra no topo", type: "checkbox", checked: this.settings.chrome === "hud", click: () => this.setChrome(this.settings.chrome === "hud" ? "window" : "hud") },
+        { label: "Tela da barra", submenu: screenMenu, enabled: displays.length > 0 },
         { type: "separator" },
-        { label: "Visibilidade da janela", submenu: windowOpacity },
-        { label: "Visibilidade da barra", submenu: hudOpacity },
+        { label: "Visibilidade…", click: () => this.showOpacityPanel() },
         {
           label: "Sobrepor",
           type: "checkbox",
@@ -298,15 +349,16 @@ export class DesktopPresence {
       const raw = JSON.parse(fs.readFileSync(this.settingsPath, "utf8")) as Partial<UiSettings> & {
         opacity?: number;
       };
-      const legacy = clamp(Number(raw.opacity) || 92, 15, 95);
+      const legacy = clamp(Number(raw.opacity) || 92, OPACITY_MIN, OPACITY_MAX);
       return {
         chrome: raw.chrome === "hud" ? "hud" : "window",
-        opacityWindow: clamp(Number(raw.opacityWindow) || 90, 15, 95),
-        opacityHud: clamp(Number(raw.opacityHud) || legacy, 15, 95),
+        opacityWindow: clamp(Number(raw.opacityWindow) || 90, OPACITY_MIN, OPACITY_MAX),
+        opacityHud: clamp(Number(raw.opacityHud) || legacy, OPACITY_MIN, OPACITY_MAX),
         overlay: Boolean(raw.overlay),
+        hudScreen: Math.max(1, Number(raw.hudScreen) || 1),
       };
     } catch {
-      return { chrome: "window", opacityWindow: 90, opacityHud: 92, overlay: false };
+      return { chrome: "window", opacityWindow: 90, opacityHud: 92, overlay: false, hudScreen: 1 };
     }
   }
 

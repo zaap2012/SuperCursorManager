@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { IngestEnvelope } from "../../core/index.js";
+import { decodeBytes, normalizeText } from "../../core/text.js";
 
 export abstract class ActivityProbe {
   abstract readonly sourceKind: string;
@@ -187,7 +188,9 @@ function readSlice(filePath: string, start: number, end: number): string {
   const buffer = Buffer.alloc(length);
   fs.readSync(fd, buffer, 0, length, start);
   fs.closeSync(fd);
-  return buffer.toString("utf8");
+  let offset = 0;
+  while (offset < buffer.length && (buffer[offset] & 0xc0) === 0x80) offset += 1;
+  return decodeBytes(offset ? buffer.subarray(offset) : buffer);
 }
 
 function projectSlugFromTranscript(filePath: string, projectsRoot: string): string {
@@ -298,13 +301,14 @@ function envelope(
 }
 
 function extractText(content: unknown[]): string {
-  return content
+  const joined = content
     .map((item) => (isRecord(item) && item.type === "text" ? str(item.text) : undefined))
     .filter((text): text is string => Boolean(text))
     .join("\n")
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+  return normalizeText(joined);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -312,5 +316,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function str(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value : undefined;
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  return normalizeText(value);
 }

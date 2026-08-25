@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { IngestEnvelope } from "../../core/index.js";
+import { decodeBytes } from "../../core/text.js";
 
 export class FileSpoolTransport {
   private offset = 0;
@@ -44,7 +45,7 @@ export class FileSpoolTransport {
       fs.readSync(fd, buffer, 0, length, this.offset);
       fs.closeSync(fd);
       this.offset = stat.size;
-      const chunk = buffer.toString("utf8");
+      const chunk = decodeBytes(buffer);
       for (const line of chunk.split(/\r?\n/)) {
         const trimmed = line.trim();
         if (!trimmed) continue;
